@@ -394,7 +394,8 @@ typedef enum
                                                      kernel_SCRIPT_FLAGS_VERIFY_CHECKLOCKTIMEVERIFY |
                                                      kernel_SCRIPT_FLAGS_VERIFY_CHECKSEQUENCEVERIFY |
                                                      kernel_SCRIPT_FLAGS_VERIFY_WITNESS |
-                                                     kernel_SCRIPT_FLAGS_VERIFY_TAPROOT
+                                                     kernel_SCRIPT_FLAGS_VERIFY_TAPROOT |
+                                                     kernel_SCRIPT_FLAGS_VERIFY_OP_CAT
 } kernel_ScriptFlags;
 
 /**
