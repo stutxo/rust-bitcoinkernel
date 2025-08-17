@@ -385,9 +385,11 @@ typedef enum
     kernel_SCRIPT_FLAGS_VERIFY_CHECKLOCKTIMEVERIFY = (1U << 9), //!< enable CHECKLOCKTIMEVERIFY (BIP65)
     kernel_SCRIPT_FLAGS_VERIFY_CHECKSEQUENCEVERIFY = (1U << 10), //!< enable CHECKSEQUENCEVERIFY (BIP112)
     kernel_SCRIPT_FLAGS_VERIFY_WITNESS             = (1U << 11), //!< enable WITNESS (BIP141)
+    kernel_SCRIPT_FLAGS_VERIFY_OP_CAT              = (1U << 26), //!< enable OP_CAT (BIP347)
+    kernel_SCRIPT_FLAGS_VERIFY_CHECKSIGFROMSTACK   = (1U << 24), //!< enable OP_CHECKSIGFROMSTACK (BIP348)
+    kernel_SCRIPT_FLAGS_VERIFY_CHECKTEMPLATEVERIFY = (1U << 21), //!< enable OP_CHECKTEMPLATEVERIFY (BIP119)
 
     kernel_SCRIPT_FLAGS_VERIFY_TAPROOT             = (1U << 17), //!< enable TAPROOT (BIPs 341 & 342)
-    kernel_SCRIPT_FLAGS_VERIFY_OP_CAT   = (1U << 26),
     kernel_SCRIPT_FLAGS_VERIFY_ALL                 = kernel_SCRIPT_FLAGS_VERIFY_P2SH |
                                                      kernel_SCRIPT_FLAGS_VERIFY_DERSIG |
                                                      kernel_SCRIPT_FLAGS_VERIFY_NULLDUMMY |
@@ -395,7 +397,9 @@ typedef enum
                                                      kernel_SCRIPT_FLAGS_VERIFY_CHECKSEQUENCEVERIFY |
                                                      kernel_SCRIPT_FLAGS_VERIFY_WITNESS |
                                                      kernel_SCRIPT_FLAGS_VERIFY_TAPROOT |
-                                                     kernel_SCRIPT_FLAGS_VERIFY_OP_CAT
+                                                     kernel_SCRIPT_FLAGS_VERIFY_OP_CAT |
+                                                     kernel_SCRIPT_FLAGS_VERIFY_CHECKSIGFROMSTACK |
+                                                     kernel_SCRIPT_FLAGS_VERIFY_CHECKTEMPLATEVERIFY 
 } kernel_ScriptFlags;
 
 /**
