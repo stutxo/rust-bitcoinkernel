@@ -387,6 +387,7 @@ typedef enum
     kernel_SCRIPT_FLAGS_VERIFY_WITNESS             = (1U << 11), //!< enable WITNESS (BIP141)
 
     kernel_SCRIPT_FLAGS_VERIFY_TAPROOT             = (1U << 17), //!< enable TAPROOT (BIPs 341 & 342)
+    kernel_SCRIPT_FLAGS_VERIFY_OP_CAT   = (1U << 26),
     kernel_SCRIPT_FLAGS_VERIFY_ALL                 = kernel_SCRIPT_FLAGS_VERIFY_P2SH |
                                                      kernel_SCRIPT_FLAGS_VERIFY_DERSIG |
                                                      kernel_SCRIPT_FLAGS_VERIFY_NULLDUMMY |

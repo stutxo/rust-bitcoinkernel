@@ -36,6 +36,8 @@ pub const VERIFY_ALL_PRE_TAPROOT: u32 = VERIFY_P2SH
     | VERIFY_CHECKLOCKTIMEVERIFY
     | VERIFY_CHECKSEQUENCEVERIFY
     | VERIFY_WITNESS;
+#[allow(clippy::unnecessary_cast)]
+pub const VERIFY_OP_CAT: u32 = kernel_ScriptFlags_kernel_SCRIPT_FLAGS_VERIFY_OP_CAT as u32;
 
 /// Verifies a transaction input against its corresponding output script.
 ///
