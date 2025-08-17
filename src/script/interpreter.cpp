@@ -343,6 +343,53 @@ static bool EvalChecksigPreTapscript(const valtype& vchSig, const valtype& vchPu
     return true;
 }
 
+static bool EvalChecksigFromStack(const valtype& sig, const valtype& msg, const valtype& pubkey_in, ScriptExecutionData& execdata, unsigned int flags, SigVersion sigversion, ScriptError* serror, bool& success)
+{
+    /*
+     *  The following validation sequence is consensus critical. Please note how --
+     *    upgradable public key versions precede other rules;
+     *    the script execution fails when using empty signature with invalid public key;
+     *    the script execution fails when using non-empty invalid signature.
+     */
+    success = !sig.empty();
+    if (success && sigversion == SigVersion::TAPSCRIPT) {
+        // Implement the sigops/witnesssize ratio test.
+        // Passing with an upgradable public key version is also counted.
+        assert(execdata.m_validation_weight_left_init);
+        execdata.m_validation_weight_left -= VALIDATION_WEIGHT_PER_SIGOP_PASSED;
+        if (execdata.m_validation_weight_left < 0) {
+            return set_error(serror, SCRIPT_ERR_TAPSCRIPT_VALIDATION_WEIGHT);
+        }
+    }
+    if (pubkey_in.size() == 0) {
+        return set_error(serror, SCRIPT_ERR_PUBKEYTYPE);
+    } else if (pubkey_in.size() == 32) {
+        if (!success) {
+            return true;
+        }
+        if (sig.size() != 64) {
+            return set_error(serror, SCRIPT_ERR_SCHNORR_SIG_SIZE);
+        }
+
+        XOnlyPubKey pubkey{pubkey_in};
+
+        if (!pubkey.VerifySchnorr(msg, sig)) {
+            return set_error(serror, SCRIPT_ERR_SCHNORR_SIG);
+        }
+    } else {
+        /*
+         *  New public key version softforks should be defined before this `else` block.
+         *  Generally, the new code should not do anything but failing the script execution. To avoid
+         *  consensus bugs, it should not modify any existing values (including `success`).
+         */
+        if ((flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_PUBKEYTYPE) != 0) {
+            return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_PUBKEYTYPE);
+        }
+    }
+
+    return true;
+}
+
 static bool EvalChecksigTapscript(const valtype& sig, const valtype& pubkey, ScriptExecutionData& execdata, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror, bool& success)
 {
     assert(sigversion == SigVersion::TAPSCRIPT);
@@ -451,10 +498,16 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                 if (opcode > OP_16 && ++nOpCount > MAX_OPS_PER_SCRIPT) {
                     return set_error(serror, SCRIPT_ERR_OP_COUNT);
                 }
+
+                // When OP_SUCCESS disabled opcodes (CVE-2010-5137) are
+                // redefined in tapscript, remove them from the if below
+                // and put them here
+                if (opcode == OP_CAT) {
+                    return set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
+                }
             }
 
-            if (opcode == OP_CAT ||
-                opcode == OP_SUBSTR ||
+            if (opcode == OP_SUBSTR ||
                 opcode == OP_LEFT ||
                 opcode == OP_RIGHT ||
                 opcode == OP_INVERT ||
@@ -517,6 +570,19 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                 //
                 case OP_NOP:
                     break;
+
+                case OP_CAT:
+                {
+                    if (stack.size() < 2)
+                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+                    valtype& vch1 = stacktop(-2);
+                    valtype& vch2 = stacktop(-1);
+                    if (vch1.size() + vch2.size() > MAX_SCRIPT_ELEMENT_SIZE)
+                        return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
+                    vch1.insert(vch1.end(), vch2.begin(), vch2.end());
+                    stack.pop_back();
+                }
+                break;
 
                 case OP_CHECKLOCKTIMEVERIFY:
                 {
@@ -591,7 +657,42 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     break;
                 }
 
-                case OP_NOP1: case OP_NOP4: case OP_NOP5:
+                case OP_CHECKTEMPLATEVERIFY:
+                {
+                    if (flags & SCRIPT_VERIFY_DISCOURAGE_CHECKTEMPLATEVERIFY) {
+                        return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS);
+                    }
+
+                    // if flags not enabled; treat as a NOP4
+                    if (!(flags & SCRIPT_VERIFY_CHECKTEMPLATEVERIFY)) {
+                        break;
+                    }
+
+                    if (stack.size() < 1) {
+                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+                    }
+
+                    // If the argument was not 32 bytes, treat as OP_NOP4:
+                    switch (stack.back().size()) {
+                        case 32:
+                        {
+                            const std::span<const unsigned char> hash{stack.back()};
+                            if (!checker.CheckDefaultCheckTemplateVerifyHash(hash)) {
+                                return set_error(serror, SCRIPT_ERR_TEMPLATE_MISMATCH);
+                            }
+                            break;
+                        }
+                        default:
+                            // future upgrade can add semantics for this opcode with different length args
+                            // so discourage use when applicable
+                            if (flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_CHECKTEMPLATEVERIFY) {
+                                return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS);
+                            }
+                    }
+                }
+                break;
+
+                case OP_NOP1: case OP_NOP5:
                 case OP_NOP6: case OP_NOP7: case OP_NOP8: case OP_NOP9: case OP_NOP10:
                 {
                     if (flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS)
@@ -1213,6 +1314,39 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                 }
                 break;
 
+                case OP_CHECKSIGFROMSTACK:
+                {
+                    // OP_CHECKSIGFROMSTACK is only available in Tapscript
+                    if (sigversion == SigVersion::BASE || sigversion == SigVersion::WITNESS_V0) {
+                        return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+                    }
+
+                    // <sig> <msg> <pubkey>
+                    if (stack.size() < 3) {
+                        return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+                    }
+
+                    const valtype& vchSigIn = stacktop(-3);
+                    const valtype& vchMsg = stacktop(-2);
+                    const valtype& vchPubKey = stacktop(-1);
+
+                    bool fSuccess = true;
+
+                    // Note that (as with CHECKSIG) if a signature was supplied and its
+                    // verification fails, we do _not_ push a "false" result to the stack.
+                    // Rather, we terminate script execution immediately. This might be
+                    // surprising if you're reading this for the first time.
+                    if (!EvalChecksigFromStack(vchSigIn, vchMsg, vchPubKey, execdata, flags, sigversion, serror, fSuccess)) {
+                        return false;
+                    }
+
+                    popstack(stack);
+                    popstack(stack);
+                    popstack(stack);
+                    stack.push_back(fSuccess ? vchTrue : vchFalse);
+                }
+                break;
+
                 default:
                     return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
             }
@@ -1377,6 +1511,18 @@ uint256 GetSpentAmountsSHA256(const std::vector<CTxOut>& outputs_spent)
     HashWriter ss{};
     for (const auto& txout : outputs_spent) {
         ss << txout.nValue;
+
+    }
+    return ss.GetSHA256();
+}
+
+/** Compute the (single) SHA256 of the concatenation of all scriptSigs in a tx. */
+template <class T>
+uint256 GetScriptSigsSHA256(const T& txTo)
+{
+    HashWriter ss{};
+    for (const auto& in : txTo.vin) {
+        ss << in.scriptSig;
     }
     return ss.GetSHA256();
 }
@@ -1391,8 +1537,65 @@ uint256 GetSpentScriptsSHA256(const std::vector<CTxOut>& outputs_spent)
     return ss.GetSHA256();
 }
 
+template<typename TxType>
+uint256 GetDefaultCheckTemplateVerifyHashWithScript(
+    const TxType& tx, const uint256& outputs_hash, const uint256& sequences_hash,
+    const uint256& scriptSig_hash, const uint32_t input_index)
+{
+    auto h = HashWriter{}
+        << tx.version
+        << tx.nLockTime
+        << scriptSig_hash
+        << uint32_t(tx.vin.size())
+        << sequences_hash
+        << uint32_t(tx.vout.size())
+        << outputs_hash
+        << input_index;
+    return h.GetSHA256();
+}
+
+template<typename TxType>
+uint256 GetDefaultCheckTemplateVerifyHashEmptyScript(
+    const TxType& tx, const uint256& outputs_hash, const uint256& sequences_hash,
+    const uint32_t input_index)
+{
+    auto h = HashWriter{}
+        << tx.version
+        << tx.nLockTime
+        << uint32_t(tx.vin.size())
+        << sequences_hash
+        << uint32_t(tx.vout.size())
+        << outputs_hash
+        << input_index;
+    return h.GetSHA256();
+}
 
 } // namespace
+
+template<typename TxType>
+uint256 GetDefaultCheckTemplateVerifyHash(const TxType& tx, uint32_t input_index) {
+    return GetDefaultCheckTemplateVerifyHash(tx, GetOutputsSHA256(tx), GetSequencesSHA256(tx), input_index);
+}
+
+template<typename TxType>
+static bool NoScriptSigs(const TxType& tx)
+{
+    return std::all_of(tx.vin.begin(), tx.vin.end(), [](const CTxIn& c) { return c.scriptSig.empty(); });
+}
+
+template<typename TxType>
+uint256 GetDefaultCheckTemplateVerifyHash(
+        const TxType& tx, const uint256& outputs_hash, const uint256& sequences_hash, const uint32_t input_index) {
+    return NoScriptSigs(tx) ? GetDefaultCheckTemplateVerifyHashEmptyScript(tx, outputs_hash, sequences_hash, input_index) :
+        GetDefaultCheckTemplateVerifyHashWithScript(tx, outputs_hash, sequences_hash, GetScriptSigsSHA256(tx), input_index);
+}
+
+template
+uint256 GetDefaultCheckTemplateVerifyHash(
+    const CTransaction& tx, const uint256& outputs_hash, const uint256& sequences_hash, const uint32_t input_index);
+template
+uint256 GetDefaultCheckTemplateVerifyHash(
+    const CMutableTransaction& tx, const uint256& outputs_hash, const uint256& sequences_hash, const uint32_t input_index);
 
 template <class T>
 void PrecomputedTransactionData::Init(const T& txTo, std::vector<CTxOut>&& spent_outputs, bool force)
@@ -1427,12 +1630,19 @@ void PrecomputedTransactionData::Init(const T& txTo, std::vector<CTxOut>&& spent
         if (uses_bip341_taproot && uses_bip143_segwit) break; // No need to scan further if we already need all.
     }
 
-    if (uses_bip143_segwit || uses_bip341_taproot) {
-        // Computations shared between both sighash schemes.
-        m_prevouts_single_hash = GetPrevoutsSHA256(txTo);
-        m_sequences_single_hash = GetSequencesSHA256(txTo);
-        m_outputs_single_hash = GetOutputsSHA256(txTo);
-    }
+    // Each of these computations is always required for CHECKTEMPLATEVERIFY, and sometimes
+    // required for any segwit/taproot evaluation.
+    m_prevouts_single_hash = GetPrevoutsSHA256(txTo);
+    m_sequences_single_hash = GetSequencesSHA256(txTo);
+    m_outputs_single_hash = GetOutputsSHA256(txTo);
+
+    // Only required for CHECKTEMPLATEVERIFY.
+    //
+    // The empty hash is used to signal whether or not we should skip scriptSigs
+    // when re-computing for different indexes.
+    m_scriptSigs_single_hash = NoScriptSigs(txTo) ? uint256{} : GetScriptSigsSHA256(txTo);
+    m_bip119_ctv_ready = true;
+
     if (uses_bip143_segwit) {
         hashPrevouts = SHA256Uint256(m_prevouts_single_hash);
         hashSequence = SHA256Uint256(m_sequences_single_hash);
@@ -1781,6 +1991,22 @@ bool GenericTransactionSignatureChecker<T>::CheckSequence(const CScriptNum& nSeq
     return true;
 }
 
+template <class T>
+bool GenericTransactionSignatureChecker<T>::CheckDefaultCheckTemplateVerifyHash(const std::span<const unsigned char>& hash) const
+{
+    // Should already be checked before calling...
+    assert(hash.size() == 32);
+    if (txdata && txdata->m_bip119_ctv_ready) {
+        assert(txTo != nullptr);
+        uint256 hash_tmpl = txdata->m_scriptSigs_single_hash.IsNull() ?
+            GetDefaultCheckTemplateVerifyHashEmptyScript(*txTo, txdata->m_outputs_single_hash, txdata->m_sequences_single_hash, nIn) :
+            GetDefaultCheckTemplateVerifyHashWithScript(*txTo, txdata->m_outputs_single_hash, txdata->m_sequences_single_hash,
+                    txdata->m_scriptSigs_single_hash, nIn);
+        return std::equal(hash_tmpl.begin(), hash_tmpl.end(), hash.data());
+    } else {
+        return HandleMissingData(m_mdb);
+    }
+}
 // explicit instantiation
 template class GenericTransactionSignatureChecker<CTransaction>;
 template class GenericTransactionSignatureChecker<CMutableTransaction>;
@@ -1798,12 +2024,27 @@ static bool ExecuteWitnessScript(const std::span<const valtype>& stack_span, con
                 // Note how this condition would not be reached if an unknown OP_SUCCESSx was found
                 return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
             }
-            // New opcodes will be listed here. May use a different sigversion to modify existing opcodes.
+
             if (IsOpSuccess(opcode)) {
-                if (flags & SCRIPT_VERIFY_DISCOURAGE_OP_SUCCESS) {
-                    return set_error(serror, SCRIPT_ERR_DISCOURAGE_OP_SUCCESS);
+                if (opcode == OP_CHECKSIGFROMSTACK) {
+                    if (flags & SCRIPT_VERIFY_DISCOURAGE_CHECKSIGFROMSTACK) {
+                        return set_error(serror, SCRIPT_ERR_DISCOURAGE_OP_SUCCESS);
+                    } else if (!(flags & SCRIPT_VERIFY_CHECKSIGFROMSTACK)) {
+                        return set_success(serror);
+                    }
+                } else if (opcode == OP_CAT) {
+                    if (flags & SCRIPT_VERIFY_DISCOURAGE_OP_CAT) {
+                        return set_error(serror, SCRIPT_ERR_DISCOURAGE_OP_CAT);
+                    } else if (!(flags & SCRIPT_VERIFY_OP_CAT)) {
+                        return set_success(serror);
+                    }
+                } else {
+                    // OP_SUCCESS behaviour
+                    if (flags & SCRIPT_VERIFY_DISCOURAGE_OP_SUCCESS) {
+                        return set_error(serror, SCRIPT_ERR_DISCOURAGE_OP_SUCCESS);
+                    }
+                    return set_success(serror);
                 }
-                return set_success(serror);
             }
         }
 
