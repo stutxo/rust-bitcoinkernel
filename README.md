@@ -18,7 +18,7 @@ be updated, or made to point at a different commit or branch in Bitcoin Core's
 history with:
 
 ```
- git subtree pull --prefix libbitcoinkernel-sys/bitcoin https://github.com/TheCharlatan/bitcoin kernelApiNode --squash
+ git subtree pull --prefix libbitcoinkernel-sys/bitcoin https://github.com/TheCharlatan/bitcoin kernelApi_48 --squash
 ```
 
 To build this library, the usual Bitcoin Core build requirements, such as
