@@ -25,6 +25,14 @@ pub const VERIFY_CHECKLOCKTIMEVERIFY: u32 =
 pub const VERIFY_CHECKSEQUENCEVERIFY: u32 =
     kernel_ScriptFlags_kernel_SCRIPT_FLAGS_VERIFY_CHECKSEQUENCEVERIFY as u32;
 #[allow(clippy::unnecessary_cast)]
+pub const VERIFY_OP_CAT: u32 = kernel_ScriptFlags_kernel_SCRIPT_FLAGS_VERIFY_OP_CAT as u32;
+#[allow(clippy::unnecessary_cast)]
+pub const VERIFY_CHECKSIGFROMSTACK: u32 =
+    kernel_ScriptFlags_kernel_SCRIPT_FLAGS_VERIFY_CHECKSIGFROMSTACK as u32;
+#[allow(clippy::unnecessary_cast)]
+pub const VERIFY_CHECKTEMPLATEVERIFY: u32 =
+    kernel_ScriptFlags_kernel_SCRIPT_FLAGS_VERIFY_CHECKTEMPLATEVERIFY as u32;
+#[allow(clippy::unnecessary_cast)]
 pub const VERIFY_WITNESS: u32 = kernel_ScriptFlags_kernel_SCRIPT_FLAGS_VERIFY_WITNESS as u32;
 #[allow(clippy::unnecessary_cast)]
 pub const VERIFY_TAPROOT: u32 = kernel_ScriptFlags_kernel_SCRIPT_FLAGS_VERIFY_TAPROOT as u32;
@@ -36,8 +44,6 @@ pub const VERIFY_ALL_PRE_TAPROOT: u32 = VERIFY_P2SH
     | VERIFY_CHECKLOCKTIMEVERIFY
     | VERIFY_CHECKSEQUENCEVERIFY
     | VERIFY_WITNESS;
-#[allow(clippy::unnecessary_cast)]
-pub const VERIFY_OP_CAT: u32 = kernel_ScriptFlags_kernel_SCRIPT_FLAGS_VERIFY_OP_CAT as u32;
 
 /// Verifies a transaction input against its corresponding output script.
 ///

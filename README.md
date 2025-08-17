@@ -1,6 +1,14 @@
-# rust-bitcoinkernel
+# rust-bitcoinkernel-covenants
 
 :warning::construction: This library is still under contruction. :warning::construction:
+
+This is a fork of `rust-bitcoinkernel` with covenant op_codes enabled
+
+Current additinal op_codes added to this library 
+
+- OP_CAT (BIP347)
+- OP_CHECKSIGFROMSTACK (BIP348)
+- OP_CHECKTEMPLATEVERIFY (BIP119)
 
 `rust-bitcoinkernel` is a wrapper around
 [libbitcoinkernel](https://github.com/bitcoin/bitcoin/issues/24303), a C++
@@ -11,14 +19,14 @@ of blocks and transaction outputs as well as reading block data.
 
 The library statically compiles the Bitcoin Core libbitcoinkernel library as
 part of its build system. Currently it targets the kernelApi branch on the
-following fork: https://github.com/TheCharlatan/bitcoin/tree/kernelApi.
+following fork: https://github.com/stutxo/bitcoin/tree/kernelApi_48.
 
 Bitcoin Core is vendored as a `git subtree` in this project. The subtree can
 be updated, or made to point at a different commit or branch in Bitcoin Core's
 history with:
 
 ```
- git subtree pull --prefix libbitcoinkernel-sys/bitcoin https://github.com/stutxo/bitcoin kernelApi_48 --squash
+git subtree pull --prefix libbitcoinkernel-sys/bitcoin https://github.com/stutxo/bitcoin kernelApi_48 --squash
 ```
 
 To build this library, the usual Bitcoin Core build requirements, such as
