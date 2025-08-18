@@ -1,6 +1,6 @@
 #![no_main]
 
-use bitcoinkernel::Block;
+use bitcoinkernel_covenants::Block;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use bitcoin::consensus::deserialize;
 use bitcoin::hashes::Hash;
 use bitcoin::{PrivateKey, XOnlyPublicKey};
-use bitcoinkernel::{
+use bitcoinkernel_covenants::{
     ChainType, ChainstateManager, ChainstateManagerOptions, Context, ContextBuilder, KernelError,
     Log, Logger,
 };

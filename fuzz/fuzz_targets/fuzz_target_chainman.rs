@@ -6,7 +6,7 @@ use libfuzzer_sys::fuzz_target;
 
 use arbitrary::Arbitrary;
 
-use bitcoinkernel::{
+use bitcoinkernel_covenants::{
     disable_logging, Block, ChainType, ChainstateManager, ChainstateManagerOptions, Context,
     ContextBuilder, KernelError, KernelNotificationInterfaceCallbacks,
     ValidationInterfaceCallbacks,

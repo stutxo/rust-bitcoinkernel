@@ -3,7 +3,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 
-use bitcoinkernel::{verify, ScriptPubkey, Transaction, TxOut};
+use bitcoinkernel_covenants::{verify, ScriptPubkey, Transaction, TxOut};
 
 #[derive(Debug, Arbitrary)]
 pub struct UtxoWrapper {
