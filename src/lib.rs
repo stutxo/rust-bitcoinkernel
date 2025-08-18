@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::os::raw::{c_char, c_void};
 use std::sync::Arc;
 
-use libbitcoinkernel_sys::*;
+use libbitcoinkernel_sys_covenants::*;
 
 #[allow(clippy::unnecessary_cast)]
 pub const VERIFY_NONE: u32 = kernel_ScriptFlags_kernel_SCRIPT_FLAGS_VERIFY_NONE as u32;
