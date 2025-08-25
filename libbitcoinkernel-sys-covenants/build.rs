@@ -17,8 +17,7 @@ fn main() {
 
     let build_config = "RelWithDebInfo";
 
-    let mut cmake_configure = Command::new("cmake");
-    cmake_configure
+    Command::new("cmake")
         .arg("-B")
         .arg(&build_dir)
         .arg("-S")
@@ -37,10 +36,9 @@ fn main() {
         .arg("-DBUILD_CLI=OFF")
         .arg("-DBUILD_SHARED_LIBS=OFF")
         .arg("-DCMAKE_INSTALL_LIBDIR=lib")
-        .arg(format!("-DCMAKE_INSTALL_PREFIX={}", install_dir.display()));
-
-    let status = cmake_configure.status().expect("cmake configure failed");
-    assert!(status.success(), "CMake configuration failed");
+        .arg(format!("-DCMAKE_INSTALL_PREFIX={}", install_dir.display()))
+        .status()
+        .unwrap();
 
     let num_jobs = env::var("NUM_JOBS")
         .ok()
@@ -72,24 +70,7 @@ fn main() {
     };
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
-    // Link all static libraries found in the install directory
-    for entry in std::fs::read_dir(&lib_dir).expect("Library directory has to be readable") {
-        let path = entry.unwrap().path();
-        if path
-            .extension()
-            .is_some_and(|extension| extension == "a" || extension == "lib")
-        {
-            if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                // Special case for libsecp256k1 on Windows
-                let lib_name = if name == "libsecp256k1" && cfg!(target_env = "msvc") {
-                    "libsecp256k1" // Use full name
-                } else {
-                    name.strip_prefix("lib").unwrap_or(name) // Strip lib prefix for others
-                };
-                println!("cargo:rustc-link-lib=static={lib_name}");
-            }
-        }
-    }
+    println!("cargo:rustc-link-lib=static=bitcoinkernel");
 
     // Header path for bindgen
     let include_path = install_dir.join("include");
