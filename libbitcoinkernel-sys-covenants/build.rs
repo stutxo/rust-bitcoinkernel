@@ -15,9 +15,14 @@ fn main() {
     // Iterate through all files in the Bitcoin Core submodule directory
     println!("cargo:rerun-if-changed={}", bitcoin_dir.display());
 
+    let target = env::var("TARGET").unwrap();
+    let host = env::var("HOST").unwrap();
+    let is_cross_compiling = target != host;
+
     let build_config = "RelWithDebInfo";
 
-    Command::new("cmake")
+    let mut cmake_configure = Command::new("cmake");
+    cmake_configure
         .arg("-B")
         .arg(&build_dir)
         .arg("-S")
@@ -37,8 +42,54 @@ fn main() {
         .arg("-DBUILD_SHARED_LIBS=OFF")
         .arg("-DCMAKE_INSTALL_LIBDIR=lib")
         .arg(format!("-DCMAKE_INSTALL_PREFIX={}", install_dir.display()))
-        .status()
-        .unwrap();
+        .arg("-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-UNDEBUG")
+        .arg("-DCMAKE_C_FLAGS_RELWITHDEBINFO=-UNDEBUG");
+
+    if is_cross_compiling && target == "aarch64-unknown-linux-musl" {
+        let zig = which::which("zig").expect("zig not found in PATH");
+        let zig_path = zig.to_str().expect("zig path not UTF-8");
+
+        let out_path = PathBuf::from(&out_dir);
+        let zig_cc_wrapper = out_path.join("zig-cc.sh");
+        let zig_cxx_wrapper = out_path.join("zig-cxx.sh");
+
+        // Write zig-cc.sh
+        std::fs::write(
+            &zig_cc_wrapper,
+            format!("#!/bin/sh\nexec {} cc \"$@\"\n", zig_path),
+        )
+        .expect("Failed to write zig-cc.sh");
+
+        // Write zig-cxx.sh
+        std::fs::write(
+            &zig_cxx_wrapper,
+            format!("#!/bin/sh\nexec {} c++ \"$@\"\n", zig_path),
+        )
+        .expect("Failed to write zig-cxx.sh");
+
+        // Make them executable
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o755);
+            std::fs::set_permissions(&zig_cc_wrapper, perms.clone()).unwrap();
+            std::fs::set_permissions(&zig_cxx_wrapper, perms).unwrap();
+        }
+
+        cmake_configure
+            .arg(format!("-DCMAKE_C_COMPILER={}", zig_cc_wrapper.display()))
+            .arg("-DCMAKE_C_COMPILER_TARGET=aarch64-linux-musl")
+            .arg(format!(
+                "-DCMAKE_CXX_COMPILER={}",
+                zig_cxx_wrapper.display()
+            ))
+            .arg("-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-musl")
+            .env("AR", "zig ar")
+            .env("RANLIB", "zig ranlib");
+    }
+
+    let status = cmake_configure.status().expect("cmake configure failed");
+    assert!(status.success(), "CMake configuration failed");
 
     let num_jobs = env::var("NUM_JOBS")
         .ok()
