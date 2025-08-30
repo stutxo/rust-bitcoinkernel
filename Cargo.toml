@@ -1,6 +1,6 @@
 [package]
 name = "bitcoinkernel-covenants"
-version = "0.0.22"
+version = "0.0.23"
 edition = "2021"
 rust-version =  "1.71.0"
 authors = ["TheCharlatan <seb.kung@gmail.com>", "stutxo <stutxo@proton.me>"]
@@ -13,7 +13,7 @@ categories = ["cryptography::cryptocurrencies"]
 readme = "README.md"
 
 [dependencies]
-libbitcoinkernel-sys-covenants = { path = "libbitcoinkernel-sys-covenants", version = "0.0.21" }
+libbitcoinkernel-sys-covenants = { path = "libbitcoinkernel-sys-covenants", version = "0.0.22" }
 
 [dev-dependencies]
 hex = "0.4"

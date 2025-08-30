@@ -1,6 +1,6 @@
 [package]
 name = "libbitcoinkernel-sys-covenants"
-version = "0.0.21"
+version = "0.0.22"
 edition = "2021"
 authors = ["TheCharlatan <seb.kung@gmail.com>", "stutxo <stutxo@proton.me>"]
 description = "Raw Rust bindings to libbitcoinkernel with added covenant op_codes"

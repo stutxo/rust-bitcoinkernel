@@ -612,7 +612,7 @@ impl Drop for ScriptPubkey {
 ///
 /// It can be initialized with a script pubkey and amount, and the user may
 /// retrieve a copy of a script pubkey and its amount.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TxOut {
     inner: *mut kernel_TransactionOutput,
 }
